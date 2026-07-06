@@ -1,0 +1,178 @@
+<template>
+    <div class="qc-root">
+
+        <template lwc:if={isLoading}>
+            <div class="qc-overlay">
+                <div class="qc-spinner-wrap">
+                    <div class="qc-spinner"></div>
+                    <p class="qc-spinner-label">Running QueryCraft Engine…</p>
+                </div>
+            </div>
+        </template>
+
+        <header class="qc-header">
+            <div class="qc-logo">
+                <span class="qc-logo-icon">⚡</span>
+                <span class="qc-logo-text">QueryCraft</span>
+                <span class="qc-logo-badge">SOQL Console</span>
+            </div>
+            <div class="qc-header-meta">
+                <span class="qc-status-dot" data-status={connectionStatus}></span>
+                <span class="qc-status-label">{connectionLabel}</span>
+            </div>
+        </header>
+
+        <div class="qc-body">
+
+            <aside class="qc-sidebar">
+                <div class="qc-panel-title">
+                    <span class="qc-panel-icon">🗂</span> Objects
+                    <span class="qc-count-badge">{filteredObjects.length}</span>
+                </div>
+
+                <div class="qc-search-wrap">
+                    <span class="qc-search-icon">🔍</span>
+                    <input class="qc-search-input" type="search" placeholder="Filter objects…" value={searchKey}
+                        oninput={handleInputChange} />
+                </div>
+
+                <ul class="qc-obj-list">
+                    <template lwc:if={filteredObjects.length}>
+                        <template for:each={filteredObjects} for:item="obj">
+                            <li key={obj} data-name={obj} onclick={handleObjectClick} class="qc-obj-item">
+                                <span class="qc-obj-dot"></span>
+                                {obj}
+                            </li>
+                        </template>
+                    </template>
+                    <template lwc:else>
+                        <li class="qc-empty-state">No objects found.</li>
+                    </template>
+                </ul>
+            </aside>
+
+            <main class="qc-main">
+
+                <div class="qc-editor-card">
+                    <div class="qc-editor-header">
+                        <span class="qc-tab-active">query.soql</span>
+                    </div>
+
+                    <textarea class="qc-editor-area" value={query} oninput={handleQueryChange}
+                        placeholder="SELECT Id FROM Account LIMIT 10" rows="5"></textarea>
+
+                    <template lwc:if={objectName}>
+                        <div class="qc-chips-section">
+                            <span class="qc-chips-label">
+                                <span class="qc-pulse-dot"></span>
+                                {objectName} Fields
+                            </span>
+                            <div class="qc-chips-scroll">
+                                <template for:each={objectFields} for:item="field">
+                                    <button key={field} data-name={field} onclick={handleFieldClick} class="qc-chip"
+                                        type="button">{field}</button>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+
+                    <div class="qc-action-bar">
+                        <div class="qc-selected-obj">
+                            <template lwc:if={objectName}>
+                                <span class="qc-obj-tag">📦 {objectName}</span>
+                            </template>
+                        </div>
+                        <div class="qc-action-btns">
+                            <button class="qc-btn qc-btn-secondary" onclick={handleExportQuery} disabled={isLoading}
+                                type="button">⬇ Export CSV</button>
+                            <button class="qc-btn qc-btn-primary" onclick={handleExecuteClick} disabled={isLoading}
+                                type="button">▶ Run Query</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="qc-results-card">
+                    <div class="qc-results-header">
+                        <div class="qc-results-title">
+                            <span class="qc-panel-icon">📊</span>
+                            <span>Results</span>
+                            <template lwc:if={queryResults.length}>
+                                <span class="qc-count-badge qc-badge-green">{queryResults.length} rows</span>
+                            </template>
+                        </div>
+                        <template lwc:if={queryResults.length}>
+                            <div class="qc-results-meta">
+                                <span class="qc-col-count">{columnCount} columns</span>
+                            </div>
+                        </template>
+                    </div>
+
+                    <template lwc:if={queryResults.length}>
+                        <div class="qc-table-container">
+                            <table class="qc-table">
+                                <thead>
+                                    <tr>
+                                        <th class="qc-th qc-th-row-num">#</th>
+                                        <template for:each={columns} for:item="col">
+                                            <th key={col.fieldName} class="qc-th" data-field={col.fieldName}
+                                                onclick={handleSort}>
+                                                <div class="qc-th-inner">
+                                                    <span class="qc-th-label">{col.label}</span>
+                                                    <span class="qc-sort-icon"
+                                                        data-field={col.fieldName}>{col.sortIcon}</span>
+                                                </div>
+                                            </th>
+                                        </template>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template for:each={paginatedRows} for:item="row">
+                                        <tr key={row._rowIndex} class="qc-tr">
+                                            <td class="qc-td qc-td-row-num">{row._rowIndex}</td>
+                                            <template for:each={row.cells} for:item="cell">
+                                                <td key={cell.key} class="qc-td" title={cell.value}>
+                                                    <span class="qc-cell-value">{cell.value}</span>
+                                                </td>
+                                            </template>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="qc-pagination">
+                            <span class="qc-page-info">
+                                Rows {pageStart}–{pageEnd} of {queryResults.length}
+                            </span>
+                            <div class="qc-page-btns">
+                                <button class="qc-page-btn" onclick={handlePrevPage} disabled={isFirstPage}
+                                    type="button">‹ Prev</button>
+                                <span class="qc-page-num">Page {currentPage} / {totalPages}</span>
+                                <button class="qc-page-btn" onclick={handleNextPage} disabled={isLastPage}
+                                    type="button">Next ›</button>
+                            </div>
+                            <div class="qc-page-size">
+                                <label class="qc-page-size-label">Rows per page:</label>
+                                <select class="qc-page-size-select" onchange={handlePageSizeChange}>
+                                    <option value="10">10</option>
+                                    <option value="25" selected>25</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template lwc:else>
+                        <div class="qc-results-empty">
+                            <div class="qc-empty-icon">⌕</div>
+                            <p class="qc-empty-title">No results yet</p>
+                            <p class="qc-empty-sub">Write a SOQL query above and click <strong>Run Query</strong></p>
+                        </div>
+                    </template>
+                </div>
+
+            </main>
+        </div>
+    </div>
+</template>
